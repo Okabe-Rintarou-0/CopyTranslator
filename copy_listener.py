@@ -7,18 +7,6 @@ import win32con as wc
 import utils
 
 
-def test_copy():
-    wcb.OpenClipboard()
-    wcb.EmptyClipboard()
-    wcb.SetClipboardData(wc.CF_TEXT, "你好，世界！".encode("gbk"))
-    wcb.CloseClipboard()
-
-    wcb.OpenClipboard()
-    data = wcb.GetClipboardData(wc.CF_TEXT)
-    wcb.CloseClipboard()
-    print(data.decode("gbk"))
-
-
 class CopyListener(object):
     def __init__(self):
         self.lastCopy = ""
@@ -44,12 +32,13 @@ class WinCopyListener(CopyListener):
         ret = ""
         try:
             wcb.OpenClipboard()
-            data = wcb.GetClipboardData(wc.CF_TEXT)
-            ret = data.decode("gbk")
+            if wcb.IsClipboardFormatAvailable(wc.CF_UNICODETEXT):
+                ret = wcb.GetClipboardData(wc.CF_UNICODETEXT)
             wcb.CloseClipboard()
         except Exception as e:
             print(e)
             ret = self.lastCopy
+            sleep(0.1)
         finally:
             return ret
 
