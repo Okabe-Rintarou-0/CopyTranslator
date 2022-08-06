@@ -20,6 +20,7 @@ Translate when you copy.
     ```shell script
     pip install -r requirements
     ``` 
+    For linux, need run `./linux_setup.sh`
 3. Run it.
     ```shell script
     python run.py
