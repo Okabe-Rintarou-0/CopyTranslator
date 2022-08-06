@@ -34,7 +34,6 @@ class WinCopyListener(CopyListener):
         self.lastCopy = self.getCopyContent()
         handler(self.lastCopy)
         while True:
-
             copy = self.getCopyContent()
             if copy != self.lastCopy:
                 self.lastCopy = copy
@@ -47,11 +46,11 @@ class WinCopyListener(CopyListener):
             wcb.OpenClipboard()
             data = wcb.GetClipboardData(wc.CF_TEXT)
             ret = data.decode("gbk")
+            wcb.CloseClipboard()
         except Exception as e:
             print(e)
             ret = self.lastCopy
         finally:
-            wcb.CloseClipboard()
             return ret
 
 

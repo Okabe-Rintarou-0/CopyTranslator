@@ -1,5 +1,12 @@
 import abc
+import json
+import logging
 import re
+import threading
+import urllib
+import urllib.parse
+import urllib.request
+from multiprocessing import cpu_count
 
 import execjs
 import requests
@@ -8,6 +15,10 @@ import requests
 class Translator(object):
     @abc.abstractmethod
     def translate(self, target: str) -> str:
+        pass
+
+    @abc.abstractmethod
+    def logError(self, err: Exception):
         pass
 
 
@@ -46,17 +57,16 @@ var token = function(r, _gtk) {
 
 
 class BaiduTranslator(Translator):
+    def logError(self, err: Exception):
+        self.logger.error(err)
+
     def translate(self, target: str) -> str:
-        try:
-            json = self.__translate__(target, dst='zh', src='en')
-            return json['trans_result']['data'][0]['dst']
-        except Exception as e:
-            print(e)
-            self.load()
-            return ""
+        respJson = self.__translate__(target, dst='zh', src='en')
+        return respJson['trans_result']['data'][0]['dst']
 
     def __init__(self):
         self.sess = requests.Session()
+        self.logger = logging.getLogger("Baidu")
         self.headers = {
             'User-Agent':
                 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -103,9 +113,9 @@ class BaiduTranslator(Translator):
         except Exception as e:
             raise e
 
-        json = r.json()
-        if 'msg' in json and json['msg'] == 'success':
-            return json['lan']
+        respJson = r.json()
+        if 'msg' in respJson and respJson['msg'] == 'success':
+            return respJson['lan']
         return None
 
     def __translate__(self, query, dst='zh', src=None):
@@ -136,17 +146,93 @@ class BaiduTranslator(Translator):
             raise e
 
         if r.status_code == 200:
-            json = r.json()
-            if 'error' in json:
-                raise Exception('baidu sdk error: {} msg: {}'.format(json['error'], json['errmsg']))
+            respJson = r.json()
+            if 'error' in respJson:
+                raise Exception('baidu sdk error: {} msg: {}'.format(respJson['error'], respJson['errmsg']))
                 # 998错误则意味需要重新加载主页获取新的token
-            return json
+            return respJson
         return None
 
 
-if __name__ == '__main__':
-    t = BaiduTranslator()
-    result = t.translate('like a hot knife through butter')
-    print(result)
-    json = t.__translate__('青花瓷', dst='en', src='zh')
-    print(json['trans_result']['data'][0]['dst'])
+class YoudaoTranslator(Translator):
+    def __init__(self):
+        self.logger = logging.getLogger("Youdao")
+        self.numWorkers = cpu_count()
+
+    def logError(self, err: Exception):
+        self.logger.error(err)
+
+    def translateSentence(self, sentences: list, results: list, idxs: list):
+        for idx in idxs:
+            if not (0 <= idx < results.__len__() and idx < sentences.__len__()):
+                raise Exception("invalid index")
+            results[idx] = self.__translate__(sentences[idx])
+
+    def translate(self, target: str) -> str:
+        sentences = target.split(".")
+        numSentences = sentences.__len__()
+        numWorkers = min(self.numWorkers, numSentences)
+        results = ['' for _ in range(numSentences)]
+        jobPerWorker = numSentences // numWorkers
+        workers = [threading.Thread(target=self.translateSentence,
+                                    args=[sentences, results, range(i * jobPerWorker, (i + 1) * jobPerWorker)])
+                   for i in range(numWorkers)]
+        for worker in workers:
+            worker.start()
+            worker.join()
+
+        return str.join(".", results)
+
+    @staticmethod
+    def __translate__(target: str) -> str:
+        url = 'http://fanyi.youdao.com/translate?smartresult=dict&smartresult=rule&sessionFrom=https://www.baidu.com' \
+              '/link '
+        data = {
+            'from': 'AUTO',
+            'to': 'AUTO',
+            'smartresult': 'dict',
+            'client': 'fanyideskweb',
+            'salt': '1500092479607',
+            'sign': 'c98235a85b213d482b8e65f6b1065e26',
+            'doctype': 'json',
+            'version': '2.1',
+            'keyfrom': 'fanyi.web',
+            'action': 'FY_BY_CL1CKBUTTON',
+            'typoResult': 'true',
+            'i': target
+        }
+
+        data = urllib.parse.urlencode(data).encode('utf-8')
+        wy = urllib.request.urlopen(url, data)
+        html = wy.read().decode('utf-8')
+        ta = json.loads(html)
+        return ta['translateResult'][0][0]['tgt']
+
+
+class BingTranslator(Translator):
+
+    def logError(self, err: Exception):
+        self.logger.error(err)
+
+    def __init__(self):
+        self.url = "http://api.microsofttranslator.com/v2/ajax.svc/TranslateArray2?"
+        self.logger = logging.getLogger("Youdao")
+
+    def translate(self, target: str) -> str:
+        return self.__translate__(src="en", dst="zh", target=target)
+
+    def __translate__(self, src: str, dst: str, target: str):
+        data = {'from': '"' + src + '"', 'to': '"' + dst + '"', 'texts': '["'}
+        data['texts'] += target
+        data['texts'] += '"]'
+        data['options'] = "{}"
+        data['oncomplete'] = 'onComplete_3'
+        data['onerror'] = 'onError_3'
+        data['_'] = '1430745999189'
+        data = urllib.parse.urlencode(data).encode('utf-8')
+        strUrl = self.url + data.decode() + "&appId=%223DAEE5B978BA031557E739EE1E2A68CB1FAD5909%22"
+        response = urllib.request.urlopen(strUrl)
+        str_data = response.read().decode('utf-8')
+        tmp, str_data = str_data.split('"TranslatedText":')
+        translate_data = str_data[1:str_data.find('"', 1)]
+        return translate_data
