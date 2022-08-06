@@ -1,9 +1,13 @@
 import abc
 from time import sleep
 
-import win32clipboard as wcb
-import win32con as wc
+from utils import isWindows
 
+if isWindows():
+    import win32clipboard as wcb
+    import win32con as wc
+else:
+    import subprocess
 import utils
 
 
@@ -43,13 +47,34 @@ class WinCopyListener(CopyListener):
             return ret
 
 
+class LinuxCopyListener(CopyListener):
+
+    def run(self, interval, handler):
+        assert interval > 0
+        self.lastCopy = self.getCopyContent()
+        handler(self.lastCopy)
+        while True:
+            copy = self.getCopyContent()
+            if copy != self.lastCopy:
+                self.lastCopy = copy
+                handler(copy)
+            sleep(interval)
+
+    def getCopyContent(self) -> str:
+        p = subprocess.Popen(
+            ["xclip", "-selection", "c", "-o"], stdout=subprocess.PIPE, close_fds=True
+        )
+        stdout, stderr = p.communicate()
+        return stdout.decode("utf-8")
+
+
 class CopyListenerFactory(object):
     @staticmethod
     def newCopyListener():
         if utils.isWindows():
             return WinCopyListener()
         else:
-            return None
+            return LinuxCopyListener()
 
 
 if __name__ == '__main__':
