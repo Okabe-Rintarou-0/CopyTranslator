@@ -7,6 +7,11 @@ import utils
 
 class Widget(object):
     def __setup_win_gui__(self):
+        self.root.geometry("1000x690")
+        self.mergeTransCheckBox = tk.Checkbutton(self.root, text="合并翻译", variable=self.merged,
+                                                 onvalue=True, offvalue=False, height=1,
+                                                 width=5)
+        self.mergeTransCheckBox.pack()
         ft = font.Font(size=20)
         self.copied = tk.Text(self.root, width=70, height=12, font=ft)
         self.copied.pack()
@@ -14,6 +19,7 @@ class Widget(object):
         self.translated.pack()
 
     def __setup_linux_gui__(self):
+        self.root.geometry("1000x670")
         fontSize = 18
         ft = font.Font(size=fontSize, font=('newspaper', 22))
         width = int(fontSize * 3.0)
@@ -26,7 +32,7 @@ class Widget(object):
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("CopyTranslator")
-        self.root.geometry("1000x670")
+        self.merged = tk.BooleanVar()
         if utils.isWindows():
             self.__setup_win_gui__()
         elif utils.isLinux():
@@ -58,3 +64,6 @@ class Widget(object):
     @staticmethod
     def error(title: str, content: str):
         mb.showerror(title, content)
+
+    def isMerged(self) -> bool:
+        return self.merged.get()

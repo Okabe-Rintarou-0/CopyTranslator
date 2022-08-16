@@ -164,13 +164,13 @@ class YoudaoTranslator(Translator):
 
     def translateSentence(self, sentences: list, results: list, idxs: list):
         for idx in idxs:
-            if not (0 <= idx < results.__len__() and idx < sentences.__len__()):
+            if not (0 <= idx < len(results) and idx < len(sentences)):
                 raise Exception("invalid index")
             results[idx] = self.__translate__(sentences[idx])
 
     def translate(self, target: str) -> str:
         sentences = target.split(".")
-        numSentences = sentences.__len__()
+        numSentences = len(sentences)
         numWorkers = min(self.numWorkers, numSentences)
         results = ['' for _ in range(numSentences)]
         jobPerWorker = numSentences // numWorkers
